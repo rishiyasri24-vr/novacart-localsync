@@ -13,6 +13,7 @@
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
     "db:migrate": "drizzle-kit migrate",
     "dev:static": "vite --host 0.0.0.0 --port ${PORT:-3000} --strictPort",
+    "mock:smtp": "node scripts/mock-smtp.mjs",
     "build:static": "vite build"
   },
   "dependencies": {
