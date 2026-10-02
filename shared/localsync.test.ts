@@ -32,11 +32,37 @@ describe("LocalSync intelligence", () => {
     expect(next.notifications[0].title).toContain("confidence updated");
   });
 
+  it("propagates the selected basket fee into the placed order total", () => {
+    const state = reducer(createSeedState(), { type: "ADD_TO_CART", productId: "milk-sri" });
+    const next = reducer(state, { type: "PLACE_ORDER", fee: 31 });
+    expect(next.orders[0].total).toBe(58 + 31);
+  });
+
+  it("rejects a basket quantity that exceeds current inventory", () => {
+    let state = reducer(createSeedState(), { type: "ADD_TO_CART", productId: "eggs-sri" });
+    state = reducer(state, { type: "SET_CART_QTY", productId: "eggs-sri", quantity: 99 });
+    const next = reducer(state, { type: "PLACE_ORDER", fee: 24 });
+    expect(next.orders).toHaveLength(1);
+    expect(next.cart[0].quantity).toBe(99);
+    expect(next.lastAction).toContain("only");
+  });
+
   it("places an order, creates a delivery, and clears the cart", () => {
     const state = reducer(createSeedState(), { type: "ADD_TO_CART", productId: "milk-sri" });
     const next = reducer(state, { type: "PLACE_ORDER" });
     expect(next.cart).toHaveLength(0);
     expect(next.orders[0].id).toMatch(/^NC/);
     expect(next.deliveries[0].orderId).toBe(next.orders[0].id);
+  });
+
+  it("restores reserved stock on cancellation and does not resurrect terminal orders", () => {
+    const initial = createSeedState();
+    const before = initial.products.find(product => product.id === "milk-sri")!.stock;
+    const withCart = reducer(initial, { type: "ADD_TO_CART", productId: "milk-sri" });
+    const placed = reducer(withCart, { type: "PLACE_ORDER" });
+    const cancelled = reducer(placed, { type: "CANCEL_ORDER", orderId: placed.orders[0].id });
+    expect(cancelled.products.find(product => product.id === "milk-sri")!.stock).toBe(before);
+    expect(cancelled.orders[0].status).toBe("CANCELLED");
+    expect(reducer(cancelled, { type: "ADVANCE_ORDER", orderId: cancelled.orders[0].id })).toEqual(cancelled);
   });
 });

@@ -96,7 +96,7 @@ export type AppAction =
   | { type: "ADD_TO_CART"; productId: string; quantity?: number }
   | { type: "SET_CART_QTY"; productId: string; quantity: number }
   | { type: "UPDATE_STOCK"; productId: string; stock: number }
-  | { type: "PLACE_ORDER"; items?: CartItem[] }
+  | { type: "PLACE_ORDER"; items?: CartItem[]; fee?: number }
   | { type: "ADVANCE_ORDER"; orderId: string }
   | { type: "CANCEL_ORDER"; orderId: string }
   | { type: "CREATE_TICKET"; category: string; orderId?: string; productName?: string }
@@ -359,7 +359,17 @@ export function reducer(state: AppState, action: AppAction): AppState {
       const items = action.items?.length ? action.items : state.cart;
       if (!items.length) return { ...state, lastAction: "Add a product before placing an order." };
       const getProduct = (id: string) => state.products.find(product => product.id === id)!;
+      const unavailable = items.find(item => item.quantity > getProduct(item.productId).stock);
+      if (unavailable) {
+        const product = getProduct(unavailable.productId);
+        return {
+          ...state,
+          notifications: [{ id: `n-${Date.now()}`, title: `${product.shortName} needs a fresh count`, body: `Only ${product.stock} units are currently available. Refresh the basket before checkout.`, tone: "warning", read: false }, ...state.notifications],
+          lastAction: `Order held: ${product.shortName} has only ${product.stock} units available.`,
+        };
+      }
       const total = items.reduce((sum, item) => sum + getProduct(item.productId).price * item.quantity, 0);
+      const fee = action.fee ?? 24;
       const orderId = `NC${10483 + state.orders.length}`;
       const storeIds = [...new Set(items.map(item => getProduct(item.productId).storeId))];
       const products = state.products.map(product => {
@@ -370,7 +380,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         ...state,
         products,
         cart: [],
-        orders: [{ id: orderId, items, total: total + 24, status: "STORE_CONFIRMING", storeIds, createdAt: "Just now", eta: 27 }, ...state.orders],
+        orders: [{ id: orderId, items, total: total + fee, status: "STORE_CONFIRMING", storeIds, createdAt: "Just now", eta: 27 }, ...state.orders],
         deliveries: [{ id: `D-${482 + state.orders.length}`, orderId, status: "STORE_CONFIRMING", eta: 27, partner: "Assigning nearby rider", delayMinutes: 0, route: "Store confirmation in progress" }, ...state.deliveries],
         notifications: [{ id: `n-${Date.now()}`, title: "Order placed — reliability check running", body: `${orderId} is being confirmed across ${storeIds.length} store${storeIds.length > 1 ? "s" : ""}.`, tone: "success", read: false }, ...state.notifications],
         lastAction: `${orderId} placed. Tracking is live.`,
@@ -379,7 +389,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case "ADVANCE_ORDER": {
       const delivery = state.deliveries.find(item => item.orderId === action.orderId);
       const order = state.orders.find(item => item.id === action.orderId);
-      if (!delivery || !order) return state;
+      if (!delivery || !order || ["DELIVERED", "CANCELLED"].includes(order.status) || ["DELIVERED", "CANCELLED"].includes(delivery.status)) return state;
       const steps: OrderStatus[] = ["STORE_CONFIRMING", "ITEMS_BEING_PICKED", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "ARRIVING_SOON", "DELIVERED"];
       const nextIndex = Math.min(steps.length - 1, Math.max(0, steps.indexOf(delivery.status) + 1));
       const nextStatus = steps[nextIndex];
@@ -391,14 +401,22 @@ export function reducer(state: AppState, action: AppAction): AppState {
         lastAction: `${order.id} moved to ${nextStatus.replaceAll("_", " ")}.`,
       };
     }
-    case "CANCEL_ORDER":
+    case "CANCEL_ORDER": {
+      const order = state.orders.find(item => item.id === action.orderId);
+      if (!order || ["DELIVERED", "CANCELLED"].includes(order.status)) return state;
+      const products = state.products.map(product => {
+        const line = order.items.find(item => item.productId === product.id);
+        return line ? { ...product, stock: product.stock + line.quantity } : product;
+      });
       return {
         ...state,
-        orders: state.orders.map(order => order.id === action.orderId && !["DELIVERED", "CANCELLED"].includes(order.status) ? { ...order, status: "CANCELLED" } : order),
+        products,
+        orders: state.orders.map(item => item.id === action.orderId ? { ...item, status: "CANCELLED" } : item),
         deliveries: state.deliveries.map(delivery => delivery.orderId === action.orderId ? { ...delivery, status: "CANCELLED" } : delivery),
-        notifications: [{ id: `n-${Date.now()}`, title: "Cancellation requested", body: `${action.orderId} is no longer being fulfilled.`, tone: "warning", read: false }, ...state.notifications],
-        lastAction: `${action.orderId} cancellation recorded.`,
+        notifications: [{ id: `n-${Date.now()}`, title: "Cancellation recorded", body: `${action.orderId} is no longer being fulfilled and stock has been released.`, tone: "warning", read: false }, ...state.notifications],
+        lastAction: `${action.orderId} cancellation recorded and stock released.`,
       };
+    }
     case "CREATE_TICKET": {
       const ticket: SupportTicket = { id: `SUP-${2220 + state.tickets.length}`, category: action.category, orderId: action.orderId, productName: action.productName, status: "OPEN", createdAt: "Just now" };
       return { ...state, tickets: [ticket, ...state.tickets], notifications: [{ id: `n-${Date.now()}`, title: "Support ticket created", body: `${ticket.id} is now in review.`, tone: "success", read: false }, ...state.notifications], lastAction: `${ticket.id} created with order context attached.` };
