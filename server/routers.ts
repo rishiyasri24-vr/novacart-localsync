@@ -17,6 +17,16 @@ export const appRouter = router({
     }),
   }),
 
+  localSync: router({
+    overview: publicProcedure.query(() => ({
+      status: "healthy" as const,
+      storesConnected: 620,
+      cities: 3,
+      model: "transparent deterministic prototype intelligence",
+      signals: ["inventory freshness", "stock cover", "store reliability", "delivery capacity"],
+    })),
+  }),
+
   // TODO: add feature routers here, e.g.
   // todo: router({
   //   list: protectedProcedure.query(({ ctx }) =>

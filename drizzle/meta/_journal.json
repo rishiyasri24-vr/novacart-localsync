@@ -8,6 +8,13 @@
       "when": 1788785580464,
       "tag": "0000_initial_users",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1790919228362,
+      "tag": "0001_famous_reaper",
+      "breakpoints": true
     }
   ]
 }
