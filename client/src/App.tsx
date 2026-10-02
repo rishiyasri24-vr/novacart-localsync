@@ -1,16 +1,19 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
+import LoginPage from "@/pages/Login";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LocalSyncProvider } from "./contexts/LocalSyncContext";
+import { useAuth } from "./_core/hooks/useAuth";
 import Home from "./pages/Home";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/login" component={LoginPage} />
       <Route path="/customer" component={Home} />
       <Route path="/store" component={Home} />
       <Route path="/operations" component={Home} />
@@ -23,6 +26,13 @@ function Router() {
   );
 }
 
+function AuthenticatedApp() {
+  const { loading, user } = useAuth();
+  if (loading) return <div className="auth-loading"><span className="live-dot" /> Restoring your connected account…</div>;
+  if (!user) return <LoginPage />;
+  return <Router />;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -30,7 +40,7 @@ export default function App() {
         <LocalSyncProvider>
           <TooltipProvider>
             <Toaster />
-            <Router />
+            <AuthenticatedApp />
           </TooltipProvider>
         </LocalSyncProvider>
       </ThemeProvider>
